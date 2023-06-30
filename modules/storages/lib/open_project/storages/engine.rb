@@ -44,11 +44,11 @@ module OpenProject::Storages
     # please see comments inside ActsAsOpEngine class
     include OpenProject::Plugins::ActsAsOpEngine
 
-    initializer 'openproject_storages.feature_decisions' do
+    initializer "openproject_storages.feature_decisions" do
       OpenProject::FeatureDecisions.add :storage_file_picking_select_all
     end
 
-    initializer 'openproject_storages.event_subscriptions' do
+    initializer "openproject_storages.event_subscriptions" do
       Rails.application.config.after_initialize do
         [
           OpenProject::Events::MEMBER_CREATED,
@@ -57,7 +57,7 @@ module OpenProject::Storages
           OpenProject::Events::PROJECT_UPDATED,
           OpenProject::Events::PROJECT_RENAMED,
           OpenProject::Events::PROJECT_ARCHIVED,
-          OpenProject::Events::PROJECT_UNARCHIVED
+          OpenProject::Events::PROJECT_UNARCHIVED,
         ].each do |event|
           OpenProject::Notifications.subscribe(event) do |_payload|
             ::Storages::ManageNextcloudIntegrationEventsJob.debounce
@@ -67,7 +67,7 @@ module OpenProject::Storages
         OpenProject::Notifications.subscribe(
           OpenProject::Events::OAUTH_CLIENT_TOKEN_CREATED
         ) do |payload|
-          if payload[:integration_type] == 'Storages::Storage'
+          if payload[:integration_type] == "Storages::Storage"
             ::Storages::ManageNextcloudIntegrationEventsJob.debounce
           end
         end
@@ -89,7 +89,7 @@ module OpenProject::Storages
         [
           OpenProject::Events::PROJECT_STORAGE_CREATED,
           OpenProject::Events::PROJECT_STORAGE_UPDATED,
-          OpenProject::Events::PROJECT_STORAGE_DESTROYED
+          OpenProject::Events::PROJECT_STORAGE_DESTROYED,
         ].each do |event|
           OpenProject::Notifications.subscribe(event) do |payload|
             if payload[:project_folder_mode] == :automatic
@@ -104,8 +104,8 @@ module OpenProject::Storages
     # For documentation see the definition of register in "ActsAsOpEngine"
     # This corresponds to the openproject-storage.gemspec
     # Pass a block to the plugin (for defining permissions, menu items and the like)
-    register 'openproject-storages',
-             author_url: 'https://www.openproject.org',
+    register "openproject-storages",
+             author_url: "https://www.openproject.org",
              bundled: true,
              settings: {} do
       # Defines permission constraints used in the module (controller, etc.)
@@ -140,14 +140,14 @@ module OpenProject::Storages
       # condition ("if:"), caption and icon.
       menu :admin_menu,
            :storages_admin_settings,
-           { controller: '/storages/admin/storages', action: :index },
+           { controller: "/storages/admin/storages", action: :index },
            if: Proc.new { User.current.admin? },
            caption: :project_module_storages,
-           icon: 'hosting'
+           icon: "hosting"
 
       menu :project_menu,
            :settings_project_storages,
-           { controller: '/storages/admin/project_storages', action: 'index' },
+           { controller: "/storages/admin/project_storages", action: "index" },
            caption: :project_module_storages,
            parent: :settings
 
@@ -189,7 +189,7 @@ module OpenProject::Storages
           ::Queries::Storages::WorkPackages::Filter::StorageIdFilter,
           ::Queries::Storages::WorkPackages::Filter::StorageUrlFilter,
           ::Queries::Storages::WorkPackages::Filter::LinkableToStorageIdFilter,
-          ::Queries::Storages::WorkPackages::Filter::LinkableToStorageUrlFilter
+          ::Queries::Storages::WorkPackages::Filter::LinkableToStorageUrlFilter,
         ].each do |filter|
           filter filter
           exclude filter
@@ -267,25 +267,32 @@ module OpenProject::Storages
     end
 
     add_api_path :file_link_open do |file_link_id, location = false|
-      "#{file_link(file_link_id)}/open#{location ? '?location=true' : ''}"
+      "#{file_link(file_link_id)}/open#{location ? "?location=true" : ""}"
     end
 
     # Add api endpoints specific to this module
-    add_api_endpoint 'API::V3::Root' do
+    add_api_endpoint "API::V3::Root" do
       mount ::API::V3::Storages::StoragesAPI
       mount ::API::V3::ProjectStorages::ProjectStoragesAPI
       mount ::API::V3::FileLinks::FileLinksAPI
     end
 
-    add_api_endpoint 'API::V3::WorkPackages::WorkPackagesAPI', :id do
+    add_api_endpoint "API::V3::WorkPackages::WorkPackagesAPI", :id do
       mount ::API::V3::FileLinks::WorkPackagesFileLinksAPI
     end
 
     add_cron_jobs do
-      [
-        Storages::CleanupUncontaineredFileLinksJob,
-        Storages::ManageNextcloudIntegrationCronJob
-      ]
+      {
+        "Storages::CleanupUncontaineredFileLinksJob" => {
+          cron: "06 22 * * *",
+          class: "Storages::CleanupUncontaineredFileLinksJob",
+        },
+
+        "Storages::ManageNextcloudIntegrationCronJob" => {
+          cron: "06 22 * * *",
+          class: "Storages::ManageNextcloudIntegrationCronJob",
+        },
+      }
     end
   end
 end
