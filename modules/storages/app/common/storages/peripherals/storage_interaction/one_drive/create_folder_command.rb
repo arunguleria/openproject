@@ -32,23 +32,22 @@ module Storages
   module Peripherals
     module StorageInteraction
       module OneDrive
-        class UploadLinkQuery
+        class CreateFolderCommand
+          def self.call(storage:, folder_path:)
+            new(storage).call(folder_path:)
+          end
+
           def initialize(storage)
             @storage = storage
             @uri = storage.uri
           end
 
-          def self.call(storage:, user:, data:)
-            new(storage).call(user:, data:)
-          end
-
-          def call(user:, data:)
-            folder, filename = data.slice('parent', 'file_name').values
-
-            Util.using_user_token(@storage, user) do |token|
+          # NOTE: This is currently creating a folder only on the root folder
+          def call(folder_path:)
+            Util.using_admin_token(@storage) do |token|
               response = Net::HTTP.start(@uri.host, @uri.port, use_ssl: true) do |http|
-                http.post(uri_path_for(folder, filename),
-                          payload(filename),
+                http.post("/v1.0/drives/#{@storage.drive_id}/root/children",
+                          payload(folder_path),
                           { 'Authorization' => "Bearer #{token.access_token}", 'Content-Type' => 'application/json' })
               end
 
@@ -58,31 +57,49 @@ module Storages
 
           private
 
-          def payload(filename)
-            { item: { "@microsoft.graph.conflictBehavior" => "rename", name: filename } }.to_json
-          end
-
           def handle_response(response)
-            error_data = ::Storages::StorageErrorData.new(source: self, payload: response.body)
+            data = ::Storages::StorageErrorData.new(source: self, payload: response.body)
 
             case response
             when Net::HTTPSuccess
-              upload_url = MultiJson.load(response.body, symbolize_keys: true)[:uploadUrl]
-              ServiceResult.success(result: ::Storages::UploadLink.new(URI(upload_url), :put))
+              ServiceResult.success(result: file_info_for(MultiJson.load(response.body, symbolize_keys: true)),
+                                    message: 'Folder was successfully created.')
             when Net::HTTPNotFound
               ServiceResult.failure(result: :not_found,
-                                    errors: ::Storages::StorageError.new(code: :not_found, data: error_data))
+                                    errors: ::Storages::StorageError.new(code: :not_found, data:))
             when Net::HTTPUnauthorized
               ServiceResult.failure(result: :unauthorized,
-                                    errors: ::Storages::StorageError.new(code: :unauthorized, data: error_data))
+                                    errors: ::Storages::StorageError.new(code: :unauthorized, data:))
+            when Net::HTTPConflict
+              ServiceResult.failure(result: :already_exists,
+                                    errors: ::Storages::StorageError.new(code: :conflict, data:))
             else
               ServiceResult.failure(result: :error,
-                                    errors: ::Storages::StorageError.new(code: :error, data: error_data))
+                                    errors: ::Storages::StorageError.new(code: :error, data:))
             end
           end
 
-          def uri_path_for(folder, filename)
-            "/v1.0/drives/#{@storage.drive_id}/items/#{folder}:/#{URI.encode_uri_component(filename)}:/createUploadSession"
+          def file_info_for(json_file)
+            StorageFile.new(
+              id: json_file[:id],
+              name: json_file[:name],
+              size: json_file[:size],
+              mime_type: Util.mime_type(json_file),
+              created_at: Time.zone.parse(json_file.dig(:fileSystemInfo, :createdDateTime)),
+              last_modified_at: Time.zone.parse(json_file.dig(:fileSystemInfo, :lastModifiedDateTime)),
+              created_by_name: json_file.dig(:createdBy, :user, :displayName),
+              last_modified_by_name: json_file.dig(:lastModifiedBy, :user, :displayName),
+              location: Util.extract_location(json_file[:parentReference], json_file[:name]),
+              permissions: %i[readable writeable]
+            )
+          end
+
+          def payload(folder_path)
+            {
+              name: folder_path,
+              folder: {},
+              '@microsoft.graph.conflictBehavior' => "fail"
+            }.to_json
           end
         end
       end
