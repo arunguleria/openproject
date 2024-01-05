@@ -1,6 +1,6 @@
 #-- copyright
 # OpenProject is an open source project management software.
-# Copyright (C) 2012-2024 the OpenProject GmbH
+# Copyright (C) 2012-2023 the OpenProject GmbH
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License version 3.
@@ -26,20 +26,39 @@
 # See COPYRIGHT and LICENSE files for more details.
 #++
 
-class Queries::Users::UserQuery
-  include Queries::BaseQuery
-  include Queries::UnpersistedQuery
+class Queries::Serialization::Filters
+  include Queries::Filters::AvailableFilters
+  include Queries::Filters::AvailableFilters::ClassMethods
 
-  def self.model
-    User
+  def load(serialized_filter_hash)
+    return [] if serialized_filter_hash.nil?
+
+    serialized_filter_hash.map do |serialized_filter|
+      filter = filter_for(serialized_filter['field'], no_memoization: true)
+      filter.operator = serialized_filter['operator']
+      filter.values = serialized_filter['values']
+
+      filter
+    end
   end
 
-  def default_scope
-    # This seemingly duplication is necessary because of the builtin classes
-    # * SystemUser
-    # * DeletedUser
-    # * AnonymousUser
-    # inheriting from user. Without it, instances of those classes would show up.
-    User.user
+  def dump(filters)
+    (filters || []).map do |filter|
+      {
+        field: filter.field,
+        operator: filter.operator,
+        values: filter.values
+      }
+    end
   end
+
+  def registered_filters
+    Queries::Register.filters[klass]
+  end
+
+  def initialize(klass)
+    @klass = klass
+  end
+
+  attr_reader :klass
 end

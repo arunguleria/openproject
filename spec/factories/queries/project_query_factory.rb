@@ -1,6 +1,6 @@
-#-- copyright
+# -- copyright
 # OpenProject is an open source project management software.
-# Copyright (C) 2012-2024 the OpenProject GmbH
+# Copyright (C) 2010-2024 the OpenProject GmbH
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License version 3.
@@ -24,22 +24,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 # See COPYRIGHT and LICENSE files for more details.
-#++
+# ++
 
-class Queries::Users::UserQuery
-  include Queries::BaseQuery
-  include Queries::UnpersistedQuery
-
-  def self.model
-    User
-  end
-
-  def default_scope
-    # This seemingly duplication is necessary because of the builtin classes
-    # * SystemUser
-    # * DeletedUser
-    # * AnonymousUser
-    # inheriting from user. Without it, instances of those classes would show up.
-    User.user
+FactoryBot.define do
+  factory :project_query, class: 'Queries::Projects::ProjectQuery' do
+    sequence(:name) { |n| "Project query #{n}" }
+    user
   end
 end
