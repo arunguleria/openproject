@@ -41,7 +41,6 @@ module Storages
           @uri = storage.uri
           @oauth_client = storage.oauth_client
           @oauth_uri = URI('https://login.microsoftonline.com/').normalize
-          super()
         end
 
         def authorization_state_check(access_token)
@@ -49,6 +48,20 @@ module Storages
             Net::HTTP.start(@uri.host, @uri.port, use_ssl: true) do |http|
               http.get('/v1.0/me', { 'Authorization' => "Bearer #{access_token}", 'Accept' => 'application/json' })
             end
+          end
+        end
+
+        def extract_origin_user_id(rack_access_token)
+          Net::HTTP.start(@uri.host, @uri.port, use_ssl: true) do |http|
+            response = http.get('/v1.0/me',
+                                { Authorization: "Bearer #{rack_access_token.access_token}", Accept: 'application/json' })
+
+            # if response == Net::HTTPSuccess
+            parsed = JSON.parse(response.body)
+            parsed['userPrincipalName']
+            # else
+            #   nil
+            # end
           end
         end
 
